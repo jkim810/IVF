@@ -69,18 +69,67 @@ ggarrange(p1, p2, nrow=2, ncol = 1, common.legend = T)
 
 
 
-```{r}
+```{r fig.height=8.5, fig.width=11}
+
+
 dfn = read.csv('meta_numeric.csv')
-numbers = dfn[,28:32]
+numbers = dfn[,c(28,29,31,32)]
 non_zero = rowSums(is.na(numbers)) == 0
-mat = dfn[non_zero, 28:32] %>% as.matrix
+mat = dfn[non_zero, c(28,29,31,32)] %>% as.matrix
 mat.pca.model = prcomp(mat)
 
-dfn.pca = mat.pca.model$x %>% as.data.frame
-ggplot(dfn.pca, aes(PC1, PC2, color = dfn$PGD_RESULT[non_zero])) +
-  geom_jitter() +
-  theme_pubr()
 
+mat.df = mat %>% as.data.frame
+t1 = cor.test(x = mat.df$BMS, y = mat.df$BS)
+t2 = cor.test(x = mat.df$BMS, y = mat.df$ICM)
+t3 = cor.test(x = mat.df$BMS, y = mat.df$TE)
+t4 = cor.test(x = mat.df$ICM, y = mat.df$BS)
+
+
+
+p1 = ggplot(mat.df, aes(x = BMS, y = BS)) +
+  geom_density_2d_filled() +
+  geom_smooth(method = "lm", color = "red", fill="#69b3a2", se = TRUE) +
+  theme_pubr() +
+  theme(legend.position='none') +
+  ggtitle(paste("Pearson Correlation:", round(t1$estimate,2)))
+p2 = ggplot(mat.df, aes(x = BMS, y = ICM)) +
+  geom_density_2d_filled() +
+  geom_smooth(method = "lm", color = "red", fill="#69b3a2", se = TRUE) +
+  theme_pubr() +
+  theme(legend.position='none') +
+  ggtitle(paste("Pearson Correlation:", round(t2$estimate,2)))
+p3 = ggplot(mat.df, aes(x = BMS, y = TE)) +
+  geom_density_2d_filled() +
+  geom_smooth(method = "lm", color = "red", fill="#69b3a2", se = TRUE) +
+  theme_pubr() +
+  theme(legend.position='none') +
+  ggtitle(paste("Pearson Correlation:", round(t3$estimate,2)))
+p4 = ggplot(mat.df, aes(x = ICM, y = TE)) +
+  geom_density_2d_filled() +
+  geom_smooth(method = "lm", color = "red", fill="#69b3a2", se = TRUE) +
+  theme_pubr() +
+  theme(legend.position='none') +
+  ggtitle(paste("Pearson Correlation:", round(t4$estimate,2)))
+
+ggarrange(p1, p2, p3, p4)
+
+dfn.pca = mat.pca.model$x %>% as.data.frame()
+dfn.pca$GROUP = dfn$PGD_RESULT[non_zero]
+dfn.pca$AGE = dfn$EGG_AGE[non_zero]
+
+dfn.pca.heatmap = dfn.pca %>%
+  group_by(GROUP) %>%
+  count(GROUP, PC1, PC2) %>%
+  as.data.frame
+
+ggplot(dfn.pca, aes(x = AGE, y = PC1)) +
+  geom_density_2d_filled() +
+  theme_pubr() +
+  ylab('Scores PC1 (Var Ex: 89.85%)') + 
+  #ylab('PC2 (Var Ex: 3.80%)') +
+  facet_wrap(~GROUP) +
+  theme(legend.position='none')
 
 ```
 
