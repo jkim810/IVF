@@ -1,0 +1,86 @@
+---
+title: "IVF EDA"
+author: "Junbum Kim"
+date: "7/22/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(readxl)
+library(ggplot2)
+library(ggsci)
+library(dplyr)
+library(ggpubr)
+df = read_excel('Metadata.xlsx')
+df$PGD_RESULT = factor(df$PGD_RESULT, levels = c("EUP", "ANU", "CxA", "MUT"))
+df = df %>% filter(BX_DAY == 6)
+colnames(df)[25] = "timepoint"
+
+```
+
+
+```{r AGE vs EUPLOIDITY STATUS}
+my_comparisons <- list( c("EUP", "ANU"), c("ANU", "CxA"), c("CxA", "MUT"), c("EUP", "MUT") ) # , c("EUP", "CxA"), c("ANU", "MUT")
+
+counts = df %>% group_by(PGD_RESULT) %>% tally()
+
+# boxplot
+ggboxplot(df, x = "PGD_RESULT", y = "EGG_AGE", color = "PGD_RESULT", palette = 'jco') + 
+  stat_compare_means(comparisons = my_comparisons, label = 'p.signif') +
+  scale_x_discrete(labels = paste(counts$PGD_RESULT, " (N = ",counts$n,")", sep = "")) +
+  xlab('')
+
+```
+
+
+```{r AGE vs EUPLOIDITY STATUS, fig.height=8, fig.width=11}
+p1 = ggplot(df, aes(EGG_AGE, fill = PGD_RESULT, color = PGD_RESULT)) +
+  geom_density(aes(y=..count..),alpha = 0.2) + 
+  scale_fill_jco() +
+  scale_color_jco() +
+  theme_pubr() +
+  facet_grid(PGD_RESULT ~ ., switch="both") +
+  geom_vline(xintercept = 38.38, linetype="dashed", color = "#3CB043", size = 1) + 
+  geom_vline(xintercept = 38.77, linetype="dashed", color = "red", size = 1) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())
+
+p2 = ggplot(df, aes(EGG_AGE, fill = PGD_RESULT, color = PGD_RESULT)) +
+  geom_density(aes(y=..count..),alpha = 0.2) + 
+  scale_fill_jco() +
+  scale_color_jco() +
+  theme_pubr() +
+  geom_vline(xintercept = 38.38, linetype="dashed", color = "#3CB043", size = 1) + 
+  geom_vline(xintercept = 38.77, linetype="dashed", color = "red", size = 1) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())
+
+p1
+p2
+ggarrange(p1, p2, nrow=2, ncol = 1, common.legend = T)
+```
+
+
+
+```{r}
+dfn = read.csv('meta_numeric.csv')
+numbers = dfn[,28:32]
+non_zero = rowSums(is.na(numbers)) == 0
+mat = dfn[non_zero, 28:32] %>% as.matrix
+mat.pca.model = prcomp(mat)
+
+dfn.pca = mat.pca.model$x %>% as.data.frame
+ggplot(dfn.pca, aes(PC1, PC2, color = dfn$PGD_RESULT[non_zero])) +
+  geom_jitter() +
+  theme_pubr()
+
+
+```
+
