@@ -216,11 +216,24 @@ TE_map = {
 	'CM' : None
 }
 
+Expansion_map = {
+	'1' : 1,
+	'1-2': 1.5,
+	'2' : 2,
+	'2-3' : 2.5,
+	'3' : 3,
+	'4' : 4,
+	'5' : 5,
+	'6' : 6,
+	'N' : None,
+	'CM' : None
+}
 
 df['ICM'] = df['ICM'].replace(ICM_map)
 df['TE'] = df['TE'].replace(TE_map)
+df['Expansion'] = df['Expansion'].replace(Expansion_map)
 
-df[['ICM', 'TE']] = df[['ICM', 'TE']].astype(float)
+df[['ICM', 'TE','Expansion']] = df[['ICM', 'TE','Expansion']].astype(float)
 '''
 pca = PCA()
 pca.fit(df[['Expansion', 'ICM', 'TE']])
