@@ -37,7 +37,6 @@ from gradcam.visualisation.core import *
 
 # Hyperparameters
 ARCHITECTURE = 'efficientnet-b2'
-TASK = 'regression'
 
 SEED       = 42
 
@@ -83,10 +82,7 @@ class IVFDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         # return tensor image X, and label y
         X = self.tfms(Image.open(self.data.loc[index, 'FILENAME'])).unsqueeze(0)
-        if TASK == 'classification':
-            y = torch.tensor(self.data.loc[index, 'LABEL'])
-        elif TASK == 'regression':
-            y = torch.tensor(self.data[scores].loc[index])
+        y = torch.tensor(self.data[scores].loc[index])
         return X, y
 
 def multi_acc(y_pred, y_test):
@@ -113,10 +109,7 @@ if __name__ == '__main__':
     # Read data
     df = pd.read_csv(MASTER_FILE)
     df = df[df['PGD_RESULT'].isin(['EUP','CxA', 'ANU'])]
-    if TASK == 'classification':
-        df['LABEL'] = df['PGD_RESULT'].replace(class2idx)
-    elif TASK == 'regression':
-        df = df[~df[scores].isnull().any(1)]
+    df = df[~df[scores].isnull().any(1)]
     
     # Plot Frequency of each elements
     # sns.countplot(x = 'PGD_RESULT', data = df)
@@ -144,11 +137,7 @@ if __name__ == '__main__':
     #model = models.resnet34(num_classes = 1).to(device)
         
     # loss function
-    if TASK == 'classification':
-        #criterion = nn.CrossEntropyLoss()
-        criterion = nn.BCEWithLogitsLoss()
-    elif TASK == 'regression':
-        criterion = nn.SmoothL1Loss()
+    criterion = nn.SmoothL1Loss()
     
     # optimizer
     # optimizer = optim.SGD(model.parameters(), lr=3e-3, momentum=0.9, nesterov = True)
@@ -169,9 +158,7 @@ if __name__ == '__main__':
     
     # Iterate through Loops
     for epoch in tqdm.tqdm(range(EPOCHS)):
-    
         train_epoch_loss = 0
-        train_epoch_acc = 0
         train_epoch_label = []
         train_epoch_pred = []
         model.train()
@@ -181,36 +168,32 @@ if __name__ == '__main__':
             X_train_batch, y_train_batch = data
             # Transfer to GPU
             X_train_batch, y_train_batch = X_train_batch.to(device), y_train_batch.float().to(device)
-            
+            y_val_batch = y_train_batch.squeeze()
+                
             # zero the parameter gradients
             optimizer.zero_grad()
     
             # forward + backward + optimize
-            outputs = model(torch.squeeze(X_train_batch, 1))
-            loss = criterion(outputs, y_train_batch.unsqueeze(1))
+            outputs = model(torch.squeeze(X_train_batch))
+            loss = criterion(outputs, y_train_batch)
             
             loss.backward()
             optimizer.step()
             
             train_epoch_loss += loss.item()
             
-            if TASK == 'classification':
-                acc = multi_acc(outputs, y_train_batch)
-                train_epoch_acc += acc.item()
-            elif TASK == 'regression':
-                # add results to a tensor and report r2_score
-                train_epoch_label += y_train_batch.tolist()
-                train_epoch_pred += outputs.tolist()
+            # add results to a tensor and report r2_score
+            train_epoch_label += y_train_batch.tolist()
+            train_epoch_pred += outputs.tolist()
                 
             
-        torch.save(model.state_dict(), os.path.join('model', 'epoch-{}.pt'.format(epoch + 1)))
+        torch.save(model.state_dict(), os.path.join('model', 'regression_epoch-{}.pt'.format(epoch + 1)))
         scheduler.step()
         
         # Validation
         with torch.no_grad():
             
             val_epoch_loss = 0
-            val_epoch_acc = 0
             val_epoch_label = []
             val_epoch_pred = []
             model.eval()
@@ -218,73 +201,25 @@ if __name__ == '__main__':
             for X_val_batch, y_val_batch in valid_loader:
                 # Transfer to GPU
                 X_val_batch, y_val_batch = X_val_batch.to(device), y_val_batch.float().to(device)
+                y_val_batch = y_val_batch.squeeze()
                 
-                y_val_pred = model(torch.squeeze(X_val_batch, 1))
-                val_loss = criterion(y_val_pred, y_val_batch.unsqueeze(1))
+                y_val_pred = model(torch.squeeze(X_val_batch))
+                val_loss = criterion(y_val_pred, y_val_batch)
                 val_epoch_loss += val_loss.item()
                 
-                if TASK == 'classification':
-                    val_acc = multi_acc(y_val_pred, y_val_batch)
-                    val_epoch_acc += val_acc.item()
-                elif TASK == 'regression':
-                    # add results to a tensor and report r2_score
-                    val_epoch_label += y_val_batch.tolist()
-                    val_epoch_pred += y_val_pred.tolist()
+                # add results to a tensor and report r2_score
+                val_epoch_label += y_val_batch.tolist()
+                val_epoch_pred += y_val_pred.tolist()
         
         loss_stats['train'].append(train_epoch_loss/len(train_loader))
         loss_stats['val'].append(val_epoch_loss/len(valid_loader))
         
-        if TASK == 'classification':
-            accuracy_stats['train'].append(train_epoch_acc/len(train_loader))
-            accuracy_stats['val'].append(val_epoch_acc/len(valid_loader))
-        
-        if TASK == 'classification':
-            print('Train Loss: {:.4f} | Val Loss: {:.4f} | Train Acc: {:.2f} | Val Acc: {:.2f}'.format(train_epoch_loss/len(train_loader), \
-                                                                                                       val_epoch_loss/len(valid_loader), \
-                                                                                                       train_epoch_acc/len(train_loader), \
-                                                                                                       val_epoch_acc/len(valid_loader)))
-        elif TASK == 'regression':
-            print('Train Loss: {:.4f} | Val Loss: {:.4f} | Train R2: {:.4f} | Val R2: {:.4f}'.format(train_epoch_loss/len(train_loader), \
-                                                                                                     val_epoch_loss/len(valid_loader), \
-                                                                                                     r2_score(train_epoch_label, train_epoch_pred), \
-                                                                                                     r2_score(val_epoch_label, val_epoch_pred))) 
+        print('Train Loss: {:.4f} | Val Loss: {:.4f} | Train R2: {:.4f} | Val R2: {:.4f}'.format(train_epoch_loss/len(train_loader), \
+                                                                                                 val_epoch_loss/len(valid_loader), \
+                                                                                                 r2_score(train_epoch_label, train_epoch_pred), \
+                                                                                                 r2_score(val_epoch_label, val_epoch_pred))) 
 
 
-    # test and report classification results
-    if TASK == 'classification':
-    
-        # Create dataframes
-        train_val_acc_df = pd.DataFrame.from_dict(accuracy_stats).reset_index().melt(id_vars=['index']).rename(columns={"index":"epochs"})
-        train_val_loss_df = pd.DataFrame.from_dict(loss_stats).reset_index().melt(id_vars=['index']).rename(columns={"index":"epochs"})
-        # Plot the dataframes
-        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(20,7))
-        g1 = sns.lineplot(data=train_val_acc_df, x = "epochs", y="value", hue="variable",  ax=axes[0])
-        g1.set_ylim(0,1)
-        plt.close(fig)        
-        g2 = sns.lineplot(data=train_val_loss_df, x = "epochs", y="value", hue="variable", ax=axes[1])
-        plt.close(fig)
-        g2.set_ylim(0,2)
-        plt.tight_layout()
-    
-        y_test = []
-        y_pred_list = []
-        with torch.no_grad():
-            model.eval()
-            for X_batch, y_batch in valid_loader:
-                X_batch = X_batch.to(device)
-                y_test_pred = model(torch.squeeze(X_batch, 1))
-                y_pred_softmax = torch.log_softmax(y_test_pred, dim = 1)
-                _, y_pred_tags = torch.max(y_pred_softmax, dim = 1)
-                y_pred_list += y_pred_tags.cpu().numpy().tolist()
-                y_test += y_batch.numpy().tolist()
-                
-        #y_pred_list = [a.squeeze().tolist() for a in y_pred_list]
-        confusion_matrix_df = pd.DataFrame(confusion_matrix(y_test, y_pred_list[:len(y_test)])).rename(columns=idx2class, index=idx2class)
-        print(confusion_matrix_df)
-        print(classification_report(y_test, y_pred_list[:len(y_test)]))
-        
-        sns.heatmap(confusion_matrix_df, annot=True)
-        
     '''
     #GRADCAM    
     for X_val_batch, y_val_batch in valid_loader:
