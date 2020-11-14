@@ -32,11 +32,10 @@ from PIL import Image
 from gradcam.visualisation.core.utils import device, image_net_postprocessing, tensor2img
 
 from torchvision.transforms import ToTensor, Resize, Compose, ToPILImage
-from gradcam.visualisation.core import *
 
 
 # Hyperparameters
-ARCHITECTURE = 'efficientnet-b2'
+ARCHITECTURE = 'efficientnet-b4'
 
 SEED       = 42
 
@@ -44,21 +43,14 @@ TRAIN_SIZE = 0.80
 VALID_SIZE = 0.20
 
 BATCH_SIZE = 4
-EPOCHS     = 10
+EPOCHS     = 5
 
 LEARNING_RATE = 1e-4
 L2_COEFFICIENT = 1e-5
 LEARNING_RATE_DECAY = 0.9
 
-MASTER_FILE = 'data_numeric.csv'
-
-# Load ImageNet class names
-class2idx = {'EUP':0,
-             'CxA':1}#,
-             #'ANU':2}
-
-idx2class = {class2idx[k]:k for k in class2idx}
-scores = ['BS'] # ,'ICM','TE']
+MASTER_FILE = 'meta_numeric_with_outcomes_inner.csv'
+scores = ['FHS_TRANS_RATIO'] #['BS'] # ,'ICM','TE']
 scaler = MinMaxScaler()
 
 # Implementation of custom dataset class to use dataloader
@@ -84,12 +76,7 @@ class IVFDataset(torch.utils.data.Dataset):
         X = self.tfms(Image.open(self.data.loc[index, 'FILENAME'])).unsqueeze(0)
         y = torch.tensor(self.data[scores].loc[index])
         return X, y
-
-def multi_acc(y_pred, y_test):
-    y_pred_softmax = torch.log_softmax(y_pred, dim = 1)
-    _, y_pred_tags = torch.max(y_pred_softmax, dim = 1)    
     
-    return torch.mean((y_pred_tags == y_test).float()) * 100
 
 if __name__ == '__main__':
     
@@ -104,7 +91,10 @@ if __name__ == '__main__':
 
     # Torch Dataloader parameters
     params = {'batch_size': BATCH_SIZE,
-              'shuffle': True}
+                    'shuffle': True}
+    
+    test_params = {'batch_size': BATCH_SIZE,
+                   'shuffle': False}
     
     # Read data
     df = pd.read_csv(MASTER_FILE)
@@ -129,11 +119,13 @@ if __name__ == '__main__':
     # Use torch Dataloader class to open batch images at a time
     train_loader = torch.utils.data.DataLoader(dataset=train_data, **params)
     valid_loader = torch.utils.data.DataLoader(dataset=valid_data, **params)
-    
+        
     # Load EfficientNet Model
     
-    model = EfficientNet.from_pretrained(ARCHITECTURE, num_classes = 1).to(device)
-    #model.load_state_dict(torch.load('model/epoch-50.pt'))
+    model = EfficientNet.from_pretrained(ARCHITECTURE, num_classes = 1, advprop=True).to(device)
+    #model.load_state_dict(torch.load('model/regression_epoch-18.pt'))
+    #model.load_state_dict(torch.load('model/regression_finetune_epoch-1.pt'))
+    
     #model = models.resnet34(num_classes = 1).to(device)
         
     # loss function
@@ -146,7 +138,7 @@ if __name__ == '__main__':
     scheduler = MultiplicativeLR(optimizer, lr_lambda=lmbda)
     
     #running_loss = 0.0
-    accuracy_stats = {
+    r2_stats = {
         'train': [],
         "val": []
     }
@@ -168,13 +160,14 @@ if __name__ == '__main__':
             X_train_batch, y_train_batch = data
             # Transfer to GPU
             X_train_batch, y_train_batch = X_train_batch.to(device), y_train_batch.float().to(device)
-            y_val_batch = y_train_batch.squeeze()
+            y_train_batch = y_train_batch.squeeze()
                 
             # zero the parameter gradients
             optimizer.zero_grad()
     
             # forward + backward + optimize
             outputs = model(torch.squeeze(X_train_batch))
+            outputs = outputs.squeeze()
             loss = criterion(outputs, y_train_batch)
             
             loss.backward()
@@ -187,7 +180,7 @@ if __name__ == '__main__':
             train_epoch_pred += outputs.tolist()
                 
             
-        torch.save(model.state_dict(), os.path.join('model', 'regression_epoch-{}.pt'.format(epoch + 1)))
+        torch.save(model.state_dict(), os.path.join('model', 'regression_finetune_outcome_epoch-{}.pt'.format(epoch + 1)))
         scheduler.step()
         
         # Validation
@@ -204,6 +197,7 @@ if __name__ == '__main__':
                 y_val_batch = y_val_batch.squeeze()
                 
                 y_val_pred = model(torch.squeeze(X_val_batch))
+                y_val_pred = y_val_pred.squeeze()
                 val_loss = criterion(y_val_pred, y_val_batch)
                 val_epoch_loss += val_loss.item()
                 
@@ -213,13 +207,57 @@ if __name__ == '__main__':
         
         loss_stats['train'].append(train_epoch_loss/len(train_loader))
         loss_stats['val'].append(val_epoch_loss/len(valid_loader))
-        
+        r2_train = r2_score(train_epoch_label, train_epoch_pred)
+        r2_val = r2_score(val_epoch_label, val_epoch_pred)
+        r2_stats['train'].append(r2_train)
+        r2_stats['val'].append(r2_val)
+                
         print('Train Loss: {:.4f} | Val Loss: {:.4f} | Train R2: {:.4f} | Val R2: {:.4f}'.format(train_epoch_loss/len(train_loader), \
                                                                                                  val_epoch_loss/len(valid_loader), \
-                                                                                                 r2_score(train_epoch_label, train_epoch_pred), \
-                                                                                                 r2_score(val_epoch_label, val_epoch_pred))) 
-
-
+                                                                                                 r2_train, \
+                                                                                                 r2_val)) 
+    '''
+    train_results = pd.DataFrame({'label':'train','true BS':train_epoch_label, 'pred BS':train_epoch_pred})
+    val_results = pd.DataFrame({'label':'validation','true BS':val_epoch_label, 'pred BS':val_epoch_pred})
+    train_results['true BS'] = train_results['true BS'] * 14 + 3
+    train_results['pred BS'] = train_results['pred BS'] * 14 + 3
+    val_results['true BS'] = val_results['true BS'] * 14 + 3
+    val_results['pred BS'] = val_results['pred BS'] * 14 + 3
+    val_results['true BS'] = val_results['true BS'].astype(int).astype('category')
+    train_results['true BS'] = train_results['true BS'].astype(int).astype('category')
+    train_results.append(val_results).to_csv('regression_results.csv',index = False)
+    sns.boxplot(x='true BS', y = 'pred BS', data=val_results)
+    '''          
+        
+    # final prediction
+    test_df = pd.read_csv(MASTER_FILE)
+    overall_data = IVFDataset(test_df, mode = 'validation')
+    overall_loader = torch.utils.data.DataLoader(dataset = overall_data, **test_params)
+    
+    # Validation
+    with torch.no_grad():
+        
+        test_epoch_pred = []
+        model.eval()
+            
+        for X_test_batch, y_test_batch in overall_loader:
+            # Transfer to GPU
+            X_test_batch, y_test_batch = X_test_batch.to(device), y_test_batch.float().to(device)
+            
+            y_test_pred = model(torch.squeeze(X_test_batch))
+            y_test_pred = y_test_pred.squeeze()            
+            
+            # add results to a tensor and report r2_score
+            test_epoch_pred += y_test_pred.tolist()
+    
+    #test_df['pred BS'] = test_epoch_pred
+    #test_df['pred BS'] = test_df['pred BS'] * 14 + 3
+    test_df = test_df[test_df.columns[1:]]
+    cor_df = test_df.corr().dropna(0, 'all').dropna(1,'all')
+    #test_df.to_csv('python_tmp_files/BS_prediction_results_finetune.csv', index = False)
+    print(cor_df)
+    sns.set(rc={'figure.figsize':(11,8.5)})
+    sns.heatmap(cor_df, cmap='coolwarm')
     '''
     #GRADCAM    
     for X_val_batch, y_val_batch in valid_loader:
