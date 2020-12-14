@@ -1,0 +1,5 @@
+./data/*
+./augmented_data_preview/*
+./"Code Backups"/*
+./python_tmp_files/*
+
