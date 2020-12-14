@@ -51,7 +51,7 @@ LEARNING_RATE = 1e-4
 L2_COEFFICIENT = 1e-5
 LEARNING_RATE_DECAY = 0.9
 
-MASTER_FILE = 'data_numeric.csv'
+MASTER_FILE = '../data/data_numeric.csv'
 
 # Load ImageNet class names
 class2idx = {'EUP':0,

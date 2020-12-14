@@ -25,7 +25,7 @@ TEST_SIZE  = 0.2
 BATCH_SIZE = 32
 EPOCHS     = 150
 
-MASTER_FILE = 'data.csv'
+MASTER_FILE = '../data/data.csv'
 
 # Load ImageNet class names
 class2idx = {'EUP':0,

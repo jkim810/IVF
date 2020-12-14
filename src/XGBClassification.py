@@ -38,7 +38,7 @@ TEST_SIZE  = 0.2
 BATCH_SIZE = 32
 EPOCHS     = 100
 
-MASTER_FILE = 'meta_numeric.csv'
+MASTER_FILE = '../data/meta_numeric.csv'
 
 # Load ImageNet class names
 labels_map = {'EUP':0,

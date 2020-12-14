@@ -49,7 +49,7 @@ LEARNING_RATE = 1e-4
 L2_COEFFICIENT = 1e-5
 LEARNING_RATE_DECAY = 0.9
 
-MASTER_FILE = 'meta_numeric_with_outcomes_inner.csv'
+MASTER_FILE = './data/meta_numeric_with_outcomes_inner.csv'
 scores = ['FHS_TRANS_RATIO'] #['BS'] # ,'ICM','TE']
 scaler = MinMaxScaler()
 

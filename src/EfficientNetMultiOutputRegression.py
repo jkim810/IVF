@@ -50,7 +50,7 @@ LEARNING_RATE_DECAY = 0.8
 
 MODEL_SAVE_NAME = ARCHITECTURE
 #MASTER_FILE = 'data_numeric.csv'
-MASTER_FILE = 'meta_numeric_with_outcomes_inner.csv'
+MASTER_FILE = '../data/meta_numeric_with_outcomes_inner.csv'
 scores = ['BS','ICM','TE'] #FHS_TRANS_RATIO
 BS_SCALE = 100
 scaler = MinMaxScaler()

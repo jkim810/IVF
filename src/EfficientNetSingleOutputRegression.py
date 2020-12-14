@@ -49,7 +49,7 @@ LEARNING_RATE_DECAY = 0.7
 
 #MASTER_FILE = 'meta_numeric_with_outcomes_inner.csv'
 MODEL_SAVE_NAME = ARCHITECTURE + '_finetune_'
-MASTER_FILE = 'data_numeric.csv'
+MASTER_FILE = '../data/data_numeric.csv'
 scores = ['PGD_RESULT_NUMERIC'] #'BS','ICM','TE', FHS_TRANS_RATIO
 scaler = MinMaxScaler()
 
