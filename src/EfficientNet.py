@@ -29,10 +29,10 @@ import tqdm
 
 from PIL import Image
 
-from gradcam.visualisation.core.utils import device, image_net_postprocessing, tensor2img
+#from gradcam.visualisation.core.utils import device, image_net_postprocessing, tensor2img
 
 from torchvision.transforms import ToTensor, Resize, Compose, ToPILImage
-from gradcam.visualisation.core import *
+#from gradcam.visualisation.core import *
 
 
 # Hyperparameters
@@ -44,14 +44,14 @@ SEED       = 42
 TRAIN_SIZE = 0.80
 VALID_SIZE = 0.20
 
-BATCH_SIZE = 4
+BATCH_SIZE = 16
 EPOCHS     = 10
 
 LEARNING_RATE = 1e-4
 L2_COEFFICIENT = 1e-5
 LEARNING_RATE_DECAY = 0.9
 
-MASTER_FILE = '../data/data_numeric.csv'
+MASTER_FILE = os.path.abspath(".") + '/data/data.csv'
 
 # Load ImageNet class names
 class2idx = {'EUP':0,
@@ -82,7 +82,7 @@ class IVFDataset(torch.utils.data.Dataset):
         
     def __getitem__(self, index):
         # return tensor image X, and label y
-        X = self.tfms(Image.open(self.data.loc[index, 'FILENAME'])).unsqueeze(0)
+        X = self.tfms(Image.open(os.path.abspath(".") + "/" + self.data.loc[index, 'FILENAME'])).unsqueeze(0)
         if TASK == 'classification':
             y = torch.tensor(self.data.loc[index, 'LABEL'])
         elif TASK == 'regression':
@@ -249,6 +249,8 @@ if __name__ == '__main__':
                                                                                                      r2_score(train_epoch_label, train_epoch_pred), \
                                                                                                      r2_score(val_epoch_label, val_epoch_pred))) 
 
+
+    torch.save(model.state_dict(), "../models/BS_prediction_efficientnet_b2.pth")
 
     # test and report classification results
     if TASK == 'classification':
